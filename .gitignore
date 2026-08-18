@@ -1,0 +1,28 @@
+# Internal planning docs — not part of the deliverable
+docs/superpowers/
+
+# Dependencies
+node_modules/
+
+# Env files with real secrets
+.env
+*.env
+!*.env.example
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Prisma
+*.db
