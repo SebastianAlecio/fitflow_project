@@ -3,9 +3,14 @@ import express from "express";
 import { prisma } from "./lib/prisma";
 import { registerService } from "./lib/consul";
 import { seedClasses } from "./lib/seed";
+import classesRouter from "./routes/classes";
+import bookingsRouter from "./routes/bookings";
 
 const app = express();
 app.use(express.json());
+
+app.use("/classes", classesRouter);
+app.use("/bookings", bookingsRouter);
 
 app.get("/healthz", (_req, res) => {
   res.json({ status: "ok" });
