@@ -1,0 +1,92 @@
+services:
+  consul:
+    image: hashicorp/consul:1.17
+    ports:
+      - "8500:8500"
+    command: agent -dev -client=0.0.0.0
+
+  users-db:
+    image: postgres:16-alpine
+    env_file: ./users-svc/.env
+    ports:
+      - "5433:5432"
+    volumes:
+      - users_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  booking-db:
+    image: postgres:16-alpine
+    env_file: ./booking-svc/.env
+    ports:
+      - "5434:5432"
+    volumes:
+      - booking_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  notif-db:
+    image: postgres:16-alpine
+    env_file: ./notif-svc/.env
+    ports:
+      - "5435:5432"
+    volumes:
+      - notif_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  users-svc:
+    build: ./users-svc
+    env_file: ./users-svc/.env
+    ports:
+      - "8003:8003"
+    depends_on:
+      users-db:
+        condition: service_healthy
+      consul:
+        condition: service_started
+
+  booking-svc:
+    build: ./booking-svc
+    env_file: ./booking-svc/.env
+    ports:
+      - "8001:8001"
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      consul:
+        condition: service_started
+
+  notif-svc:
+    build: ./notif-svc
+    env_file: ./notif-svc/.env
+    ports:
+      - "8002:8002"
+    depends_on:
+      notif-db:
+        condition: service_healthy
+      consul:
+        condition: service_started
+
+  fitflow-mcp:
+    build: ./fitflow-mcp
+    env_file: ./fitflow-mcp/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      consul:
+        condition: service_started
+
+volumes:
+  users_db_data:
+  booking_db_data:
+  notif_db_data:
