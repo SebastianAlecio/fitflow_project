@@ -157,11 +157,29 @@ curl http://localhost:8002/notifications/user/1
 ## Conectar Claude Desktop a fitflow-mcp
 
 `fitflow-mcp` corre dentro de Docker Compose y queda expuesto en `http://localhost:8000/mcp`
-usando el transporte Streamable HTTP de MCP. Para conectarlo a Claude Desktop:
+usando el transporte Streamable HTTP de MCP, en HTTP plano (sin HTTPS, porque es un servidor
+local de desarrollo). La opción de "Add custom connector" de Claude Desktop exige que la URL
+sea `https://`, así que para un servidor local en HTTP hay que usar `mcp-remote`, un puente
+que corre local y traduce entre lo que Claude Desktop espera y nuestro servidor HTTP. No hace
+falta instalarlo a mano, `npx` lo descarga solo la primera vez.
 
-1. Abrir Claude Desktop → **Settings** → **Connectors** → **Add custom connector**.
-2. Poner un nombre, por ejemplo `FitFlow`, y como URL `http://localhost:8000/mcp`.
-3. Guardar y esperar a que el conector quede activo.
+1. Abrir el archivo de configuración de Claude Desktop:
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+2. Agregar (o crear) la clave `mcpServers` con esta entrada:
+   ```json
+   {
+     "mcpServers": {
+       "FitFlow": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote", "http://localhost:8000/mcp", "--allow-http"]
+       }
+     }
+   }
+   ```
+   Si el archivo ya tiene otras claves, esta se agrega al mismo nivel, sin borrar nada de lo
+   que ya había.
+3. Cerrar Claude Desktop por completo y volver a abrirlo para que cargue la nueva configuración.
 4. En un chat nuevo, escribir algo como *"¿qué clases hay disponibles?"* — Claude va a usar
    la herramienta `get_available_classes`, que a su vez descubre `booking-svc` vía Consul y le
    pide la lista real de clases.
