@@ -49,7 +49,7 @@ router.get("/:id", async (req, res) => {
   return res.json(booking);
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, async (req: AuthedRequest, res) => {
   const id = Number(req.params.id);
   if (Number.isNaN(id)) {
     return res.status(400).json({ error: "Invalid id" });
@@ -57,6 +57,9 @@ router.delete("/:id", requireAuth, async (req, res) => {
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) {
+    return res.status(404).json({ error: "Booking not found" });
+  }
+  if (booking.userId !== req.userId) {
     return res.status(404).json({ error: "Booking not found" });
   }
   if (booking.status === "cancelled") {

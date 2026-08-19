@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import "express-async-errors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { registerGetAvailableClasses } from "./tools/get-available-classes.js";
@@ -42,6 +43,11 @@ app.get("/mcp", (_req, res) => {
 
 app.delete("/mcp", (_req, res) => {
   res.status(405).json({ error: "Method not allowed in stateless mode" });
+});
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: "Internal server error" });
 });
 
 const PORT = Number(process.env.PORT || 8000);

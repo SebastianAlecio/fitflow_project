@@ -47,6 +47,7 @@ services:
   users-svc:
     build: ./users-svc
     env_file: ./users-svc/.env
+    restart: unless-stopped
     ports:
       - "8003:8003"
     depends_on:
@@ -58,6 +59,7 @@ services:
   booking-svc:
     build: ./booking-svc
     env_file: ./booking-svc/.env
+    restart: unless-stopped
     ports:
       - "8001:8001"
     depends_on:
@@ -69,6 +71,7 @@ services:
   notif-svc:
     build: ./notif-svc
     env_file: ./notif-svc/.env
+    restart: unless-stopped
     ports:
       - "8002:8002"
     depends_on:
@@ -80,6 +83,7 @@ services:
   fitflow-mcp:
     build: ./fitflow-mcp
     env_file: ./fitflow-mcp/.env
+    restart: unless-stopped
     ports:
       - "8000:8000"
     depends_on:
