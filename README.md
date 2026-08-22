@@ -205,3 +205,11 @@ saludables.*
 
 ![Claude Desktop creando una reserva](docs/screenshots/05-claude-desktop-reserva.png)
 *Claude creando una reserva real a través de `create_booking`.*
+
+## Video Checkpoint 1
+
+Video demostrando el sistema funcionando: los tres microservicios levantados con Docker,
+los healthcheck respondiendo, el registro de servicios en Consul, y Claude Desktop listando
+clases y creando una reserva real a través de MCP.
+
+[Ver video](https://drive.google.com/file/d/1C4uxvg8ydOR0FhjdyL4-BhCk-oojWWcE/view?usp=sharing)
