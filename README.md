@@ -209,3 +209,7 @@ saludables.*
 
 ![Claude Desktop creando una reserva](docs/screenshots/05-claude-desktop-reserva.png)
 *Claude creando una reserva real a través de `create_booking`.*
+
+## Video demo (Checkpoint 1)
+
+[Ver video demo del Checkpoint 1](https://drive.google.com/file/d/1GC7LEsx0JzmTn9E2MxpVzF9etr08Q086/view?usp=sharing)
