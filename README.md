@@ -1,5 +1,9 @@
 # FitFlow
 
+**Equipo:**
+- Alessandro Alecio — carnet 21001224
+- Joaquín Marroquín — carnet 20004254
+
 FitFlow es una plataforma de reservas de clases de gimnasio, pensada como ejercicio de
 arquitectura de microservicios. El sistema está compuesto por tres servicios independientes
 (usuarios, reservas y notificaciones), cada uno con su propia base de datos, que se registran
@@ -205,11 +209,3 @@ saludables.*
 
 ![Claude Desktop creando una reserva](docs/screenshots/05-claude-desktop-reserva.png)
 *Claude creando una reserva real a través de `create_booking`.*
-
-## Video Checkpoint 1
-
-Video demostrando el sistema funcionando: los tres microservicios levantados con Docker,
-los healthcheck respondiendo, el registro de servicios en Consul, y Claude Desktop listando
-clases y creando una reserva real a través de MCP.
-
-[Ver video](https://drive.google.com/file/d/1C4uxvg8ydOR0FhjdyL4-BhCk-oojWWcE/view?usp=sharing)
