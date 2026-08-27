@@ -25,3 +25,12 @@ model Booking {
   createdAt DateTime @default(now())
   class     Class    @relation(fields: [classId], references: [id])
 }
+
+model NotificationOutbox {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  classId   Int
+  message   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+}

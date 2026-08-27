@@ -10,6 +10,7 @@ import {
 } from "cockatiel";
 import { discoverService } from "./consul";
 import { logEvent } from "./logger";
+import { prisma } from "./prisma";
 
 const retryPolicy = retry(handleAll, {
   maxAttempts: 3,
@@ -65,6 +66,9 @@ export async function notifyBookingCreated(
       classId,
       error: String(err),
       circuitBreakerState: circuitBreakerPolicy.state,
+    });
+    await prisma.notificationOutbox.create({
+      data: { userId, classId, message, status: "pending" },
     });
   }
 }
