@@ -67,8 +67,16 @@ export async function notifyBookingCreated(
       error: String(err),
       circuitBreakerState: circuitBreakerPolicy.state,
     });
-    await prisma.notificationOutbox.create({
-      data: { userId, classId, message, status: "pending" },
-    });
+    try {
+      await prisma.notificationOutbox.create({
+        data: { userId, classId, message, status: "pending" },
+      });
+    } catch (outboxErr) {
+      logEvent(correlationId, "outbox_write_failed", "error", {
+        userId,
+        classId,
+        error: String(outboxErr),
+      });
+    }
   }
 }
