@@ -178,6 +178,21 @@ pendiente en la tabla `NotificationOutbox` de la base de `booking-svc` (`status:
 en lugar de perderse. Hoy no hay un job que las reprocese automáticamente — queda como
 trabajo futuro.
 
+Importante: esto es "persistir al fallar", no un outbox transaccional — el row en
+`NotificationOutbox` recién se escribe después de agotar los reintentos (hasta ~11 segundos
+después de crear la reserva), así que si `booking-svc` se cae o se reinicia justo en esa
+ventana, la notificación se pierde sin dejar ningún registro. Un outbox transaccional real
+escribiría la fila dentro de la misma transacción que crea la reserva.
+
+Trabajo futuro relacionado con el outbox:
+
+- Convertir el outbox en un patrón transaccional real (escribir la fila dentro de la misma
+  transacción que crea la reserva).
+- Los reintentos pueden generar notificaciones duplicadas si `notif-svc` procesó la request
+  pero la respuesta no llegó a tiempo (no hay idempotency key ni constraint de unicidad).
+- El outbox no guarda `correlationId` ni `bookingId`, así que una fila pendiente no se puede
+  enlazar de vuelta a la reserva o al log que la originó.
+
 Para probarlo localmente:
 
 ```bash

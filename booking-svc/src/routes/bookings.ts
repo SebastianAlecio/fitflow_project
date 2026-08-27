@@ -34,9 +34,9 @@ router.post("/", requireAuth, async (req, res) => {
   });
 
   logEvent(typedReq.correlationId, "booking_created", "info", {
-    userId: booking.userId,
-    bookingId: booking.id,
-    classId: booking.classId,
+    user_id: booking.userId,
+    booking_id: booking.id,
+    class_id: booking.classId,
   });
 
   void notifyBookingCreated(booking.userId, booking.classId, typedReq.correlationId);
@@ -89,8 +89,8 @@ router.delete("/:id", requireAuth, async (req, res) => {
   });
 
   logEvent(typedReq.correlationId, "booking_cancelled", "info", {
-    userId: typedReq.userId,
-    bookingId: updated.id,
+    user_id: typedReq.userId,
+    booking_id: updated.id,
   });
 
   return res.json(updated);

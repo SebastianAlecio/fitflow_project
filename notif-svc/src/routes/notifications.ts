@@ -17,7 +17,7 @@ router.post("/", async (req: Request, res) => {
   });
 
   logEvent(correlatedReq.correlationId, "notification_sent", "info", {
-    userId: notification.userId,
+    user_id: notification.userId,
     channel: notification.channel,
   });
 

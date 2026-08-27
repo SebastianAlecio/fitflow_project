@@ -59,13 +59,13 @@ export async function notifyBookingCreated(
         throw new Error(`notif-svc responded with ${res.status}`);
       }
     });
-    logEvent(correlationId, "notification_delivered", "info", { userId, classId });
+    logEvent(correlationId, "notification_delivered", "info", { user_id: userId, class_id: classId });
   } catch (err) {
     logEvent(correlationId, "notification_failed", "error", {
-      userId,
-      classId,
+      user_id: userId,
+      class_id: classId,
       error: String(err),
-      circuitBreakerState: circuitBreakerPolicy.state,
+      circuit_breaker_state: circuitBreakerPolicy.state,
     });
     try {
       await prisma.notificationOutbox.create({
@@ -73,8 +73,8 @@ export async function notifyBookingCreated(
       });
     } catch (outboxErr) {
       logEvent(correlationId, "outbox_write_failed", "error", {
-        userId,
-        classId,
+        user_id: userId,
+        class_id: classId,
         error: String(outboxErr),
       });
     }
