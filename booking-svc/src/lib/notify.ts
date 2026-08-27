@@ -1,11 +1,19 @@
 import { discoverService } from "./consul";
+import { logEvent } from "./logger";
 
-export async function notifyBookingCreated(userId: number, classId: number): Promise<void> {
+export async function notifyBookingCreated(
+  userId: number,
+  classId: number,
+  correlationId: string
+): Promise<void> {
   try {
     const notif = await discoverService("notif-svc");
     const res = await fetch(`http://${notif.address}:${notif.port}/notifications`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-correlation-id": correlationId,
+      },
       body: JSON.stringify({
         userId,
         message: `Tu reserva para la clase ${classId} fue confirmada.`,
@@ -13,9 +21,11 @@ export async function notifyBookingCreated(userId: number, classId: number): Pro
       }),
     });
     if (!res.ok) {
-      console.error(`notif-svc responded with ${res.status}`);
+      logEvent(correlationId, "notification_failed", "error", { userId, classId, status: res.status });
+      return;
     }
+    logEvent(correlationId, "notification_delivered", "info", { userId, classId });
   } catch (err) {
-    console.error("Could not reach notif-svc (booking still succeeds):", err);
+    logEvent(correlationId, "notification_failed", "error", { userId, classId, error: String(err) });
   }
 }

@@ -2,10 +2,13 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
 import { notifyBookingCreated } from "../lib/notify";
+import { CorrelatedRequest } from "../middleware/correlation";
+import { logEvent } from "../lib/logger";
 
 const router = Router();
 
-router.post("/", requireAuth, async (req: AuthedRequest, res) => {
+router.post("/", requireAuth, async (req, res) => {
+  const typedReq = req as AuthedRequest & CorrelatedRequest;
   const { classId } = req.body ?? {};
   if (!classId) {
     return res.status(400).json({ error: "classId is required" });
@@ -21,7 +24,7 @@ router.post("/", requireAuth, async (req: AuthedRequest, res) => {
 
   const booking = await prisma.$transaction(async (tx) => {
     const created = await tx.booking.create({
-      data: { userId: req.userId as number, classId: klass.id },
+      data: { userId: typedReq.userId as number, classId: klass.id },
     });
     await tx.class.update({
       where: { id: klass.id },
@@ -30,7 +33,13 @@ router.post("/", requireAuth, async (req: AuthedRequest, res) => {
     return created;
   });
 
-  void notifyBookingCreated(booking.userId, booking.classId);
+  logEvent(typedReq.correlationId, "booking_created", "info", {
+    userId: booking.userId,
+    bookingId: booking.id,
+    classId: booking.classId,
+  });
+
+  void notifyBookingCreated(booking.userId, booking.classId, typedReq.correlationId);
 
   return res.status(201).json(booking);
 });
@@ -49,7 +58,8 @@ router.get("/:id", async (req, res) => {
   return res.json(booking);
 });
 
-router.delete("/:id", requireAuth, async (req: AuthedRequest, res) => {
+router.delete("/:id", requireAuth, async (req, res) => {
+  const typedReq = req as AuthedRequest & CorrelatedRequest;
   const id = Number(req.params.id);
   if (Number.isNaN(id)) {
     return res.status(400).json({ error: "Invalid id" });
@@ -59,7 +69,7 @@ router.delete("/:id", requireAuth, async (req: AuthedRequest, res) => {
   if (!booking) {
     return res.status(404).json({ error: "Booking not found" });
   }
-  if (booking.userId !== req.userId) {
+  if (booking.userId !== typedReq.userId) {
     return res.status(404).json({ error: "Booking not found" });
   }
   if (booking.status === "cancelled") {
@@ -76,6 +86,11 @@ router.delete("/:id", requireAuth, async (req: AuthedRequest, res) => {
       data: { booked: { decrement: 1 } },
     });
     return cancelled;
+  });
+
+  logEvent(typedReq.correlationId, "booking_cancelled", "info", {
+    userId: typedReq.userId,
+    bookingId: updated.id,
   });
 
   return res.json(updated);
