@@ -1,9 +1,12 @@
-import { Router } from "express";
+import { Router, Request } from "express";
 import { prisma } from "../lib/prisma";
+import { CorrelatedRequest } from "../middleware/correlation";
+import { logEvent } from "../lib/logger";
 
 const router = Router();
 
-router.post("/", async (req, res) => {
+router.post("/", async (req: Request, res) => {
+  const correlatedReq = req as CorrelatedRequest;
   const { userId, message, channel } = req.body ?? {};
   if (!userId || !message) {
     return res.status(400).json({ error: "userId and message are required" });
@@ -13,14 +16,10 @@ router.post("/", async (req, res) => {
     data: { userId: Number(userId), message, channel: channel || "log" },
   });
 
-  console.log(
-    JSON.stringify({
-      event: "notification_sent",
-      userId: notification.userId,
-      message: notification.message,
-      channel: notification.channel,
-    })
-  );
+  logEvent(correlatedReq.correlationId, "notification_sent", "info", {
+    userId: notification.userId,
+    channel: notification.channel,
+  });
 
   return res.status(201).json(notification);
 });

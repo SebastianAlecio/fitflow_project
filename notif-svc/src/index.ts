@@ -3,10 +3,13 @@ import express from "express";
 import "express-async-errors";
 import { prisma } from "./lib/prisma";
 import { registerService } from "./lib/consul";
+import { correlationMiddleware, CorrelatedRequest } from "./middleware/correlation";
+import { logEvent } from "./lib/logger";
 import notificationsRouter from "./routes/notifications";
 
 const app = express();
 app.use(express.json());
+app.use(correlationMiddleware);
 
 app.use("/notifications", notificationsRouter);
 
@@ -23,8 +26,9 @@ app.get("/readyz", async (_req, res) => {
   }
 });
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const correlationId = (req as CorrelatedRequest).correlationId ?? "startup";
+  logEvent(correlationId, "unhandled_error", "error", { error: String(err) });
   res.status(500).json({ error: "Internal server error" });
 });
 
@@ -39,20 +43,20 @@ async function registerWithRetry(): Promise<void> {
         address: "notif-svc",
         port: PORT,
       });
-      console.log("notif-svc registered in Consul");
+      logEvent("startup", "consul_registered", "info", { attempt });
       return;
     } catch (err) {
-      console.error(`Consul registration attempt ${attempt}/5 failed:`, err);
+      logEvent("startup", "consul_registration_failed", "error", { attempt, maxAttempts: 5, error: String(err) });
       if (attempt < 5) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
   }
-  console.error("Giving up on initial Consul registration after 5 attempts");
+  logEvent("startup", "consul_registration_gave_up", "error", { attempts: 5 });
 }
 
 app.listen(PORT, async () => {
-  console.log(`notif-svc listening on port ${PORT}`);
+  logEvent("startup", "service_listening", "info", { port: PORT });
   await registerWithRetry();
   setInterval(() => {
     registerService({
@@ -60,6 +64,6 @@ app.listen(PORT, async () => {
       name: "notif-svc",
       address: "notif-svc",
       port: PORT,
-    }).catch((err) => console.error("Consul re-registration failed:", err));
+    }).catch((err) => logEvent("startup", "consul_reregistration_failed", "error", { error: String(err) }));
   }, 30_000);
 });
