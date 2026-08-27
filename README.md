@@ -13,10 +13,11 @@ interactuar con el sistema usando lenguaje natural.
 
 Por ahora está implementado: los tres microservicios corriendo con Docker Compose, cada uno
 con su propia base Postgres, autenticación con JWT, registro y descubrimiento dinámico con
-Consul, y el servidor MCP con tres herramientas (listar clases, crear reserva, cancelar
-reserva). Cosas como resiliencia ante fallos (circuit breaker, retries), logs estructurados
-con correlation-id, rotación de secretos documentada y una capa de agentes A2A quedan como
-trabajo futuro.
+Consul, el servidor MCP con tres herramientas (listar clases, crear reserva, cancelar
+reserva), resiliencia ante fallos de `notif-svc` (timeout, retries con backoff/jitter y
+circuit breaker, con un outbox de notificaciones pendientes), logs JSON estructurados con
+`x-correlation-id` en `booking-svc` y `notif-svc`, y rotación de credenciales documentada.
+Una capa de agentes A2A queda como trabajo futuro.
 
 ## Arquitectura
 
@@ -157,6 +158,83 @@ Ver el historial de notificaciones del usuario (se genera sola cuando se crea un
 ```bash
 curl http://localhost:8002/notifications/user/1
 ```
+
+## Resiliencia ante fallos de notif-svc
+
+`booking-svc` llama a `notif-svc` después de crear una reserva, pero nunca bloquea la
+respuesta al cliente por eso ni hace que la reserva falle si `notif-svc` está caído. La
+llamada (`booking-svc/src/lib/notify.ts`) está envuelta con
+[`cockatiel`](https://github.com/connor4312/cockatiel) combinando tres patrones:
+
+- **Timeout de 2s** por intento — si `notif-svc` no responde a tiempo, se aborta la request.
+- **Retry con backoff exponencial + jitter** — hasta 3 reintentos, con espera creciente entre
+  intentos.
+- **Circuit breaker** — si hay 3 fallos consecutivos, el circuito se abre por 30 segundos
+  (deja de intentar llamar a `notif-svc` durante ese tiempo, para no saturarlo). Pasado ese
+  tiempo prueba una vez ("half-open"); si funciona, se cierra de nuevo.
+
+Mientras el circuito está abierto o cualquier intento falla, la notificación se guarda como
+pendiente en la tabla `NotificationOutbox` de la base de `booking-svc` (`status: "pending"`)
+en lugar de perderse. Hoy no hay un job que las reprocese automáticamente — queda como
+trabajo futuro.
+
+Para probarlo localmente:
+
+```bash
+docker compose stop notif-svc
+
+# hacer 3+ reservas seguidas (usando el $TOKEN de la sección anterior)
+for i in 1 2 3; do
+  curl -s -X POST http://localhost:8001/bookings \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d '{"classId":1}'
+  echo
+done
+
+# ver el circuit breaker abrirse y las reservas seguir creándose (201, no 500)
+docker compose logs booking-svc --tail 50
+
+# confirmar que las notificaciones fallidas quedaron guardadas
+docker compose exec booking-db psql -U booking_app -d booking_db \
+  -c 'SELECT * FROM "NotificationOutbox";'
+
+docker compose start notif-svc
+```
+
+## Logs estructurados y correlation-id
+
+`booking-svc` y `notif-svc` emiten logs en JSON (vía [`pino`](https://getpino.io)) con al
+menos estos campos: `correlation_id`, `service`, `event`, `level`, `timestamp`. Cada request
+entrante genera (o reutiliza, si ya viene en el header `x-correlation-id`) un ID único que
+viaja de `booking-svc` a `notif-svc` en ese mismo header, permitiendo rastrear un flujo
+completo entre ambos servicios:
+
+```bash
+docker compose logs booking-svc notif-svc | grep <correlation_id>
+```
+
+## Rotación de credenciales
+
+**Password de base de datos (por servicio):** cada servicio es dueño exclusivo de su propia
+base, así que rotar su password no afecta al resto del sistema.
+
+1. Crear un nuevo usuario/password en la instancia de Postgres del servicio (o cambiar el
+   password del usuario existente con `ALTER USER ... WITH PASSWORD '...'`).
+2. Actualizar `DATABASE_URL` (y `POSTGRES_PASSWORD`) en el `.env` de ese servicio.
+3. `docker compose up -d --build <servicio>` — solo ese contenedor se reinicia.
+4. Confirmar que levantó bien: `curl http://localhost:<puerto>/readyz`.
+5. Revocar el password viejo en Postgres.
+
+**`JWT_SECRET`** (compartido por `users-svc`, `booking-svc` y `fitflow-mcp`):
+
+1. Generar un nuevo secreto: `openssl rand -hex 32`.
+2. Actualizarlo en los `.env` de los 3 servicios que lo usan.
+3. Reiniciar los 3 en secuencia: `docker compose up -d --build users-svc booking-svc fitflow-mcp`.
+4. Los tokens emitidos con el secreto viejo dejan de validar de inmediato (no hay soporte a
+   doble-secreto). Como duran máximo 2 horas, el impacto se limita a que los usuarios con
+   sesión activa tengan que volver a hacer login — se acepta esa breve ventana en vez de
+   agregar la complejidad de verificar contra dos secretos simultáneos.
 
 ## Conectar Claude Desktop a fitflow-mcp
 
