@@ -306,3 +306,6 @@ saludables.*
 ## Video demo (Checkpoint 1)
 
 [Ver video demo del Checkpoint 1](https://drive.google.com/file/d/1GC7LEsx0JzmTn9E2MxpVzF9etr08Q086/view?usp=sharing)
+
+## Video demo (Checkpoint 2)
+[Ver video demo del Checkpoint 2](https://drive.google.com/file/d/1ifnfeapNTgeWwhavH_S9YiL-avF2hbBe/view?usp=sharing) 
