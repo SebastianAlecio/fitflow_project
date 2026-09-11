@@ -5,19 +5,29 @@ export type ParsedIntent =
   | { skill: "cancel_booking"; bookingId: number }
   | { skill: "send_notification"; message: string };
 
-export function parseInstruction(instruction: string): ParsedIntent[] {
+export interface ParseResult {
+  intents: ParsedIntent[];
+  unresolvedPrimary?: "create_booking" | "cancel_booking";
+}
+
+export function parseInstruction(instruction: string): ParseResult {
   const lower = instruction.toLowerCase();
   const intents: ParsedIntent[] = [];
+  let unresolvedPrimary: "create_booking" | "cancel_booking" | undefined;
 
   if (/cancela|cancelar/.test(lower)) {
     const match = lower.match(/\d+/);
     if (match) {
       intents.push({ skill: "cancel_booking", bookingId: Number(match[0]) });
+    } else {
+      unresolvedPrimary = "cancel_booking";
     }
   } else if (/reserva|reservar/.test(lower)) {
     const className = CLASS_NAMES.find((name) => lower.includes(name.toLowerCase()));
     if (className) {
       intents.push({ skill: "create_booking", className });
+    } else {
+      unresolvedPrimary = "create_booking";
     }
   }
 
@@ -34,5 +44,5 @@ export function parseInstruction(instruction: string): ParsedIntent[] {
     intents.push({ skill: "send_notification", message });
   }
 
-  return intents;
+  return { intents, unresolvedPrimary };
 }

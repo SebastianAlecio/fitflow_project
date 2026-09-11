@@ -317,6 +317,14 @@ Es la misma idea de los microservicios, aplicada a agentes:
 | Se descubren dinámicamente                  | Se descubren vía Agent Cards               |
 | Se comunican por HTTP                       | Se comunican por protocolo A2A             |
 
+**Importante:** esta implementación es una versión simplificada del protocolo A2A real, no la
+especificación completa de Google. La delegación de tareas acá es HTTP + JSON plano
+(`POST /tasks` con `{taskId, skillId, input}`), sin el envoltorio JSON-RPC, sin máquina de
+estados de tareas ni bus de eventos que define la especificación oficial. Existe un SDK
+oficial (`@a2a-js/sdk`) que sí implementa todo eso, pero se decidió a propósito no usarlo —
+para el alcance de este proyecto agregaba mucha complejidad (conceptos nuevos como task state
+machine, event bus, envoltorio JSON-RPC) sin aportar nada que se fuera a demostrar en la demo.
+
 ### Los tres agentes nuevos
 
 ```
@@ -378,6 +386,21 @@ docker compose logs orchestrator-agent booking-agent notification-agent | grep <
 Ese mismo `taskId` aparece en los logs de los tres agentes, mostrando el camino completo: el
 Orchestrator recibiendo la instrucción, descubriendo cada agente por su Agent Card, delegando
 la tarea, y el resultado volviendo.
+
+### Limitaciones conocidas
+
+- Los endpoints nuevos (`POST /instructions` en el Orchestrator, `POST /tasks` en los otros
+  dos agentes) no tienen autenticación — cualquiera que les pegue directo puede actuar como
+  cualquier `userId`. Esto no es peor que lo que ya permitía `fitflow-mcp` (que ya mintea un
+  JWT para el `userId` que le pasen), solo que ahora ese camino no necesita pasar por el
+  protocolo MCP, solo un curl a uno de estos tres puertos nuevos. Aceptable para este
+  proyecto porque todo corre en la red interna de Docker Compose, pero no estaría listo para
+  producción real sin agregarle autenticación entre agentes.
+- La lista de nombres de clase que reconoce el parser del Orchestrator (`CLASS_NAMES` en
+  `orchestrator-agent/src/lib/parser.ts`) está copiada a mano de las clases que siembra
+  `booking-svc`. Si se agrega o renombra una clase ahí, hay que actualizar el parser también
+  — una versión más robusta consultaría `get_available_classes` en el arranque en vez de
+  tener la lista fija.
 
 ## Capturas
 

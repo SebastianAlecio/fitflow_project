@@ -93,7 +93,14 @@ export async function runIntents(
           ? { userId, bookingId: intent.bookingId }
           : { userId, message: intent.message };
 
-    const result = await delegateTask(taskId, url, intent.skill, input);
+    let result: TaskResult;
+    try {
+      result = await delegateTask(taskId, url, intent.skill, input);
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logEvent(taskId, "a2a_task_failed", "error", { skill: intent.skill, error });
+      result = { skill: intent.skill, status: "failed", error };
+    }
     results.push(result);
 
     if (
