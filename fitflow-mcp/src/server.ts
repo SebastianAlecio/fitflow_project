@@ -6,12 +6,16 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { registerGetAvailableClasses } from "./tools/get-available-classes.js";
 import { registerCreateBooking } from "./tools/create-booking.js";
 import { registerCancelBooking } from "./tools/cancel-booking.js";
+import { registerSendNotification } from "./tools/send-notification.js";
+import { registerGetNotificationHistory } from "./tools/get-notification-history.js";
 
 function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "fitflow-mcp", version: "1.0.0" });
   registerGetAvailableClasses(server);
   registerCreateBooking(server);
   registerCancelBooking(server);
+  registerSendNotification(server);
+  registerGetNotificationHistory(server);
   return server;
 }
 

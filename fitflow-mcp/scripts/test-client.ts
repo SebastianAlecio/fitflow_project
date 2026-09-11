@@ -22,6 +22,18 @@ async function main() {
   });
   console.log("create_booking ->", JSON.stringify(booking, null, 2));
 
+  const notification = await client.callTool({
+    name: "send_notification",
+    arguments: { userId: 1, message: "Prueba de send_notification desde test-client" },
+  });
+  console.log("send_notification ->", JSON.stringify(notification, null, 2));
+
+  const history = await client.callTool({
+    name: "get_notification_history",
+    arguments: { userId: 1 },
+  });
+  console.log("get_notification_history ->", JSON.stringify(history, null, 2));
+
   await client.close();
 }
 
