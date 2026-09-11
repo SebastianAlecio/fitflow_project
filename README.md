@@ -11,13 +11,15 @@ solos en un Service Registry (Consul) para poder encontrarse entre sí sin URLs
 hardcodeadas. Además hay un servidor MCP que le permite a un agente de IA (Claude Desktop)
 interactuar con el sistema usando lenguaje natural.
 
-Por ahora está implementado: los tres microservicios corriendo con Docker Compose, cada uno
-con su propia base Postgres, autenticación con JWT, registro y descubrimiento dinámico con
-Consul, el servidor MCP con tres herramientas (listar clases, crear reserva, cancelar
-reserva), resiliencia ante fallos de `notif-svc` (timeout, retries con backoff/jitter y
-circuit breaker, con un outbox de notificaciones pendientes), logs JSON estructurados con
-`x-correlation-id` en `booking-svc` y `notif-svc`, y rotación de credenciales documentada.
-Una capa de agentes A2A queda como trabajo futuro.
+Está implementado: los tres microservicios corriendo con Docker Compose, cada uno con su
+propia base Postgres, autenticación con JWT, registro y descubrimiento dinámico con Consul,
+el servidor MCP con cinco herramientas (listar clases, crear reserva, cancelar reserva,
+enviar notificación y consultar historial de notificaciones), resiliencia ante fallos de
+`notif-svc` (timeout, retries con backoff/jitter y circuit breaker, con un outbox de
+notificaciones pendientes), logs JSON estructurados con `x-correlation-id` en `booking-svc` y
+`notif-svc`, rotación de credenciales documentada, y una capa de tres agentes especializados
+(Orchestrator, Booking Agent, Notification Agent) que se coordinan entre sí usando el
+protocolo A2A.
 
 ## Arquitectura
 
@@ -63,13 +65,16 @@ dónde está (nunca usa una IP fija), y le pega por HTTP a su API.
 
 ## Servicios y puertos
 
-| Servicio      | Puerto | Qué hace                                    |
-|---------------|--------|----------------------------------------------|
-| users-svc     | 8003   | Registro y autenticación de usuarios (JWT)   |
-| booking-svc   | 8001   | Gestión de reservas de clases                |
-| notif-svc     | 8002   | Envío de notificaciones (por ahora, un log)  |
-| fitflow-mcp   | 8000   | Expone FitFlow a agentes de IA vía MCP       |
-| consul        | 8500   | Descubrimiento y registro de servicios       |
+| Servicio           | Puerto | Qué hace                                        |
+|--------------------|--------|--------------------------------------------------|
+| users-svc          | 8003   | Registro y autenticación de usuarios (JWT)       |
+| booking-svc        | 8001   | Gestión de reservas de clases                    |
+| notif-svc          | 8002   | Envío de notificaciones (por ahora, un log)      |
+| fitflow-mcp        | 8000   | Expone FitFlow a agentes de IA vía MCP           |
+| consul             | 8500   | Descubrimiento y registro de servicios           |
+| orchestrator-agent | 9000   | Interpreta instrucciones y delega a otros agentes|
+| booking-agent      | 9001   | Agente A2A especialista en reservas              |
+| notification-agent | 9002   | Agente A2A especialista en notificaciones        |
 
 ## Cómo correrlo
 
@@ -79,13 +84,16 @@ cd FitFlow_Proyecto
 ```
 
 Cada servicio tiene su propio archivo de variables de entorno. Hay que copiarlo y completarlo
-en los cuatro:
+en los siete:
 
 ```bash
 cp users-svc/.env.example users-svc/.env
 cp booking-svc/.env.example booking-svc/.env
 cp notif-svc/.env.example notif-svc/.env
 cp fitflow-mcp/.env.example fitflow-mcp/.env
+cp orchestrator-agent/.env.example orchestrator-agent/.env
+cp booking-agent/.env.example booking-agent/.env
+cp notification-agent/.env.example notification-agent/.env
 ```
 
 Para `JWT_SECRET` hay que generar un valor random:
@@ -105,8 +113,8 @@ Con eso listo:
 docker compose up --build
 ```
 
-Esto levanta 8 contenedores: Consul, las tres bases Postgres, y los cuatro servicios de la
-aplicación. Cuando todo esté arriba:
+Esto levanta 11 contenedores: Consul, las tres bases Postgres, y los siete servicios de la
+aplicación (los cuatro de antes más los tres agentes A2A). Cuando todo esté arriba:
 
 ```bash
 curl http://localhost:8003/healthz   # {"status":"ok"}
@@ -283,6 +291,93 @@ falta instalarlo a mano, `npx` lo descarga solo la primera vez.
 5. Para reservar, algo como *"reserva la clase de yoga para el usuario 1"* — Claude usa
    `create_booking`, que crea un JWT válido internamente y llama a `booking-svc` para crear la
    reserva de verdad en la base de datos.
+
+## Agent-to-Agent (A2A)
+
+Hasta acá, para que un agente de IA usara FitFlow, tenía que hablar directo con `fitflow-mcp`
+usando el protocolo MCP. Esta sección agrega una capa distinta: en vez de un solo agente que
+sabe hacer de todo, hay tres agentes especializados que se coordinan entre sí usando A2A
+(Agent-to-Agent), un protocolo abierto pensado justamente para que un agente le delegue
+trabajo a otro.
+
+La diferencia con MCP es el tipo de pregunta que resuelve cada uno:
+
+- **MCP** responde "¿cómo un agente usa un sistema externo?" — es la forma en la que Claude (o
+  cualquier agente) llama a las herramientas de FitFlow.
+- **A2A** responde "¿cómo un agente le delega trabajo a otro agente?" — en vez de un agente que
+  sabe reservar, cancelar y notificar, hay agentes especializados que se descubren y se
+  coordinan entre sí.
+
+Es la misma idea de los microservicios, aplicada a agentes:
+
+| Microservicios                            | Agentes con A2A                          |
+|--------------------------------------------|-------------------------------------------|
+| Cada servicio tiene una responsabilidad     | Cada agente tiene una especialidad         |
+| Se registran en Consul (service registry)   | Se publican con un Agent Card (agent registry) |
+| Se descubren dinámicamente                  | Se descubren vía Agent Cards               |
+| Se comunican por HTTP                       | Se comunican por protocolo A2A             |
+
+### Los tres agentes nuevos
+
+```
+Usuario (curl / instrucción en lenguaje natural)
+        │  POST /instructions
+        ▼
+┌──────────────────────┐
+│   orchestrator-agent    │  :9000 — interpreta la instrucción, descubre
+│                          │  agentes por su Agent Card y les delega tareas
+└───────────┬──────────┘
+            │ A2A (POST /tasks)
+     ┌──────┴───────┐
+     ▼              ▼
+┌───────────┐  ┌────────────────────┐
+│ booking-   │  │ notification-        │
+│ agent       │  │ agent                  │
+│ :9001       │  │ :9002                  │
+└─────┬─────┘  └──────────┬──────────┘
+      │  cliente MCP         │  cliente MCP
+      └──────────┬───────────┘
+                  ▼
+           fitflow-mcp :8000
+```
+
+- **Orchestrator Agent** — recibe la instrucción, decide qué agente(s) necesita según palabras
+  clave (reservar, cancelar, avisar), los descubre pidiendo su Agent Card, y les delega la
+  tarea. Esta parte es determinística (por palabras clave), no usa un modelo de lenguaje —
+  simplificación consciente para el alcance del curso; en un sistema real, esta interpretación
+  la haría un LLM.
+- **Booking Agent** — especialista en reservas. Por dentro es cliente MCP de `fitflow-mcp`:
+  usa `get_available_classes` para encontrar el ID de la clase por nombre, y después
+  `create_booking`/`cancel_booking` para la acción real.
+- **Notification Agent** — especialista en notificaciones. También cliente MCP de
+  `fitflow-mcp`, usando las herramientas `send_notification` y `get_notification_history`.
+
+Ningún agente se registra en Consul — a propósito. La idea es mostrar que A2A usa su propio
+mecanismo de descubrimiento (el Agent Card, publicado en `/.well-known/agent.json`), en
+paralelo al de los microservicios, no mezclado con él.
+
+### Probarlo
+
+```bash
+curl http://localhost:9000/.well-known/agent.json
+curl http://localhost:9001/.well-known/agent.json
+curl http://localhost:9002/.well-known/agent.json
+
+curl -X POST http://localhost:9000/instructions \
+  -H "Content-Type: application/json" \
+  -d '{"userId":1,"instruction":"Reserva yoga para el viernes y avísame por notificación"}'
+```
+
+La respuesta trae un `taskId` y el resultado de cada tarea delegada. Para ver la traza
+completa de la comunicación entre agentes:
+
+```bash
+docker compose logs orchestrator-agent booking-agent notification-agent | grep <taskId>
+```
+
+Ese mismo `taskId` aparece en los logs de los tres agentes, mostrando el camino completo: el
+Orchestrator recibiendo la instrucción, descubriendo cada agente por su Agent Card, delegando
+la tarea, y el resultado volviendo.
 
 ## Capturas
 
