@@ -90,6 +90,38 @@ services:
       consul:
         condition: service_started
 
+  orchestrator-agent:
+    build: ./orchestrator-agent
+    env_file: ./orchestrator-agent/.env
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    depends_on:
+      booking-agent:
+        condition: service_started
+      notification-agent:
+        condition: service_started
+
+  booking-agent:
+    build: ./booking-agent
+    env_file: ./booking-agent/.env
+    restart: unless-stopped
+    ports:
+      - "9001:9001"
+    depends_on:
+      fitflow-mcp:
+        condition: service_started
+
+  notification-agent:
+    build: ./notification-agent
+    env_file: ./notification-agent/.env
+    restart: unless-stopped
+    ports:
+      - "9002:9002"
+    depends_on:
+      fitflow-mcp:
+        condition: service_started
+
 volumes:
   users_db_data:
   booking_db_data:
